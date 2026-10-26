@@ -1,0 +1,29 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments & virtualenvs
+.env
+.env.local
+venv/
+env/
+ENV/
+
+# Firebase Service Account Credentials & Keys
+serviceAccountKey.json
+*.serviceaccount.json
+credentials.json
+firebase-credentials.json
+*-firebase-adminsdk-*.json
+
+# Operating System & IDE files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
