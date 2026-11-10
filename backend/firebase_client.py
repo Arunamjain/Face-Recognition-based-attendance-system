@@ -1,9 +1,15 @@
 import os
 import logging
+import threading
 from typing import Optional, Dict, Any, List
 from backend.config import FIREBASE_CREDENTIALS_PATH, FIREBASE_PROJECT_ID
 
 logger = logging.getLogger("backend.firebase")
+
+
+class MockAlreadyExistsError(Exception):
+    """Raised when create() targets an existing mock Firestore document."""
+
 
 # In-memory document and collection simulation for mock testing and offline mode
 class MockDocumentSnapshot:
@@ -24,6 +30,12 @@ class MockDocumentReference:
     def get(self) -> MockDocumentSnapshot:
         data = self.collection.store.get(self.id)
         return MockDocumentSnapshot(self.id, data)
+
+    def create(self, data: Dict[str, Any]):
+        with self.collection.lock:
+            if self.id in self.collection.store:
+                raise MockAlreadyExistsError(f"Document {self.id} already exists.")
+            self.collection.store[self.id] = dict(data)
 
     def set(self, data: Dict[str, Any], merge: bool = False):
         if merge and self.id in self.collection.store:
@@ -69,9 +81,10 @@ class MockQuery:
 
 
 class MockCollectionReference:
-    def __init__(self, name: str, root_store: Dict[str, Dict[str, Dict[str, Any]]]):
+    def __init__(self, name: str, root_store: Dict[str, Dict[str, Dict[str, Any]]], lock):
         self.name = name
         self._root_store = root_store
+        self.lock = lock
         if name not in self._root_store:
             self._root_store[name] = {}
         self.store = self._root_store[name]
@@ -91,12 +104,14 @@ class MockFirestoreClient:
     """Mock Firestore client providing the Firestore SDK interface for testing/offline use."""
     def __init__(self):
         self._collections: Dict[str, Dict[str, Dict[str, Any]]] = {}
+        self._lock = threading.RLock()
 
     def collection(self, name: str) -> MockCollectionReference:
-        return MockCollectionReference(name, self._collections)
+        return MockCollectionReference(name, self._collections, self._lock)
 
     def clear(self):
-        self._collections.clear()
+        with self._lock:
+            self._collections.clear()
 
 
 # Global client holders
@@ -121,7 +136,6 @@ def initialize_firebase(force_mock: bool = False):
     if _firestore_client is not None:
         return _firestore_client
 
-    # Check for serviceAccountKey.json
     cred_path = FIREBASE_CREDENTIALS_PATH
     if os.path.exists(cred_path):
         try:

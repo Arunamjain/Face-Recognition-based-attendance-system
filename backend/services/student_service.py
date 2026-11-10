@@ -1,9 +1,10 @@
 import logging
+import uuid
 from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
 
 from backend.config import COLLECTION_STUDENTS, COLLECTION_EMBEDDINGS
-from backend.firebase_client import get_db
+from backend.firebase_client import get_db, MockAlreadyExistsError
 from backend.models import (
     StudentCreate,
     StudentUpdate,
@@ -27,10 +28,6 @@ class StudentService:
         Registers a new student or raises ValueError if student_id already exists.
         """
         student_ref = self.db.collection(COLLECTION_STUDENTS).document(student_in.student_id)
-        doc = student_ref.get()
-        if doc.exists:
-            raise ValueError(f"Student with ID '{student_in.student_id}' already exists.")
-
         now_iso = datetime.now(timezone.utc).isoformat()
         student_data = {
             "student_id": student_in.student_id,
@@ -41,7 +38,12 @@ class StudentService:
             "is_active": True,
             "created_at": now_iso,
         }
-        student_ref.set(student_data)
+        try:
+            student_ref.create(student_data)
+        except Exception as exc:
+            if isinstance(exc, MockAlreadyExistsError) or exc.__class__.__name__ == "AlreadyExists":
+                raise ValueError(f"Student with ID '{student_in.student_id}' already exists.") from exc
+            raise
         logger.info(f"Registered student: {student_in.student_id} ({student_in.name})")
 
         return StudentResponse(
@@ -85,13 +87,16 @@ class StudentService:
         Lists all registered students.
         """
         students = []
+        embedding_counts = {}
+        for emb_doc in self.db.collection(COLLECTION_EMBEDDINGS).stream():
+            student_id = emb_doc.to_dict().get("student_id")
+            embedding_counts[student_id] = embedding_counts.get(student_id, 0) + 1
+
         docs = self.db.collection(COLLECTION_STUDENTS).stream()
         for doc in docs:
             data = doc.to_dict()
             student_id = data["student_id"]
-            # Count embeddings
-            emb_query = self.db.collection(COLLECTION_EMBEDDINGS).where("student_id", "==", student_id).stream()
-            count = sum(1 for _ in emb_query)
+            count = embedding_counts.get(student_id, 0)
 
             students.append(
                 StudentResponse(
@@ -156,12 +161,12 @@ class StudentService:
         if not student_doc.exists:
             raise ValueError(f"Cannot save embedding: Student with ID '{student_id}' does not exist.")
 
-        student_name = student_doc.to_dict().get("name", "Unknown")
+        student_data = student_doc.to_dict()
+        if not student_data.get("is_active", True):
+            raise ValueError(f"Cannot save embedding: Student with ID '{student_id}' is inactive.")
 
-        # Determine next embedding index for this student
-        existing_docs = list(self.db.collection(COLLECTION_EMBEDDINGS).where("student_id", "==", student_id).stream())
-        next_idx = len(existing_docs) + 1
-        embedding_id = f"EMB_{student_id}_{next_idx}"
+        student_name = student_data.get("name", "Unknown")
+        embedding_id = f"EMB_{uuid.uuid4().hex}"
 
         now_iso = datetime.now(timezone.utc).isoformat()
         embedding_doc_data = {
@@ -174,7 +179,7 @@ class StudentService:
             "created_at": now_iso,
         }
 
-        self.db.collection(COLLECTION_EMBEDDINGS).document(embedding_id).set(embedding_doc_data)
+        self.db.collection(COLLECTION_EMBEDDINGS).document(embedding_id).create(embedding_doc_data)
         logger.info(f"Saved embedding {embedding_id} for student {student_id} ({student_name})")
 
         return EmbeddingResponse(

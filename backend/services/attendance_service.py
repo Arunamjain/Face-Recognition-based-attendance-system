@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 from backend.config import COLLECTION_ATTENDANCE, COLLECTION_STUDENTS, DEFAULT_SESSION_ID, RECOGNITION_THRESHOLD
-from backend.firebase_client import get_db
+from backend.firebase_client import get_db, MockAlreadyExistsError
 from backend.models import (
     AttendanceMarkRequest,
     AttendanceResponse,
@@ -37,7 +37,10 @@ class AttendanceService:
         if not student_doc.exists:
             raise ValueError(f"Student with ID '{request.student_id}' does not exist.")
 
-        student_name = student_doc.to_dict().get("name", "Unknown")
+        student_data = student_doc.to_dict()
+        if not student_data.get("is_active", True):
+            raise ValueError(f"Cannot mark attendance: Student with ID '{request.student_id}' is inactive.")
+        student_name = student_data.get("name", "Unknown")
 
         # 2. Check recognition threshold
         if request.similarity_score < min_threshold:
@@ -84,7 +87,24 @@ class AttendanceService:
             "status": "PRESENT",
         }
 
-        record_ref.set(attendance_data)
+        try:
+            record_ref.create(attendance_data)
+        except Exception as exc:
+            if isinstance(exc, MockAlreadyExistsError) or exc.__class__.__name__ == "AlreadyExists":
+                data = record_ref.get().to_dict() or {}
+                return AttendanceResponse(
+                    record_id=record_id,
+                    student_id=request.student_id,
+                    student_name=student_name,
+                    date=record_date,
+                    timestamp=data.get("timestamp", timestamp_iso),
+                    session_id=session_id,
+                    similarity_score=data.get("similarity_score", round(request.similarity_score, 4)),
+                    status=data.get("status", "PRESENT"),
+                    already_recorded=True,
+                    message=f"Attendance already marked previously at {data.get('timestamp')}.",
+                )
+            raise
         logger.info(f"Marked attendance for {request.student_id} ({student_name}) on {record_date} (Session: {session_id})")
 
         return AttendanceResponse(
