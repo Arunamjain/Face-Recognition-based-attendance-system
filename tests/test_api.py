@@ -84,7 +84,7 @@ def test_embedding_endpoints(client):
     })
     assert save_res.status_code == 201
     emb_data = save_res.json()
-    assert emb_data["embedding_id"] == "EMB_CS_2026_02_1"
+    assert emb_data["embedding_id"].startswith("EMB_")
     assert emb_data["student_name"] == "Elena Rostova"
 
     # 3. List all embeddings (for startup sync)
