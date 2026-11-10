@@ -14,7 +14,7 @@ For an attendance management system, **Google Cloud Firestore** is chosen based 
 | **Data Structure** | Giant monolithic JSON tree | Structured document collections with shallow queries |
 | **Query Flexibility** | Limited sorting/filtering on single keys | Rich multi-field indexing (filter by date, session, student) |
 | **Deterministic Record Keys** | Key insertion appends or replaces in tree | Named document paths (`attendance/{student_id}_{date}_{session}`) |
-| **Atomic Deduplication** | Requires deep transaction blocks | Native document ID uniqueness + atomic `set()` merge |
+| **Atomic Deduplication** | Requires deep transaction blocks | Atomic `create()` fails if the document already exists |
 | **Data Payload Efficiency** | Querying a node downloads all nested children | Shallow queries fetch only metadata without large nested sub-nodes |
 | **Capacity & Scalability** | Max 1 GB per JSON instance | Document storage with 1 MB per document limit (embedding is ~2 KB) |
 
@@ -44,7 +44,7 @@ Stores student registration and academic details.
 Stores the normalized 512-dimensional ArcFace face embedding vectors.
 
 - **Document Path**: `embeddings/{embedding_id}`
-- **Document ID**: `EMB_{student_id}_{index}` (e.g., `"EMB_STU2026001_1"`)
+- **Document ID**: `EMB_{uuid}` (random UUID-based identifier)
 - **Fields**:
   | Field Name | Type | Description |
   | :--- | :--- | :--- |
@@ -82,7 +82,7 @@ Stores verified attendance markings for lectures and sessions.
 Because the document key is formed deterministically (`{student_id}_{date}_{session_id}`):
 1. The first time a student is recognized, Firestore creates the document.
 2. Any subsequent recognitions for that same student on that same date and session point to the exact same document ID.
-3. The attendance service detects the existing record and returns `already_recorded: true` without creating duplicate records or altering existing entries.
+3. The service uses Firestore `create()` so only the first request can create the document. Concurrent duplicate requests receive an already-recorded response without overwriting the original record.
 
 ---
 
@@ -174,5 +174,5 @@ Because the document key is formed deterministically (`{student_id}_{date}_{sess
 2. **Environment Variables**:
    - Environment configurations are loaded using `python-dotenv`.
    - `.env.example` provides the template for configuring `FIREBASE_CREDENTIALS_PATH`, `BACKEND_PORT`, and `RECOGNITION_THRESHOLD`.
-3. **Mock Isolation**:
+3. **Biometric Data Protection**:\n   - Face embeddings are biometric identifiers. Restrict database and API access, use least-privilege service accounts, TLS, and appropriate retention/deletion policies. Do not expose embedding vectors in public endpoints.\n4. **API Authentication**:\n   - Protect student, embedding, and attendance endpoints with authentication and role-based authorization before deploying beyond a trusted local environment.\n5. **Mock Isolation**:
    - For CI/CD, unit testing, and initial setup, `firebase_client.py` provides an in-memory Firestore engine. Tests never touch or require production credentials.
