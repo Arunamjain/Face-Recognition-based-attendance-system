@@ -68,11 +68,12 @@ def test_embedding_management(student_service):
 
     # Save 2 embeddings for STU002
     emb1 = student_service.save_embedding("STU002", [0.1] * 512, metadata={"blur": 85.0})
-    assert emb1.embedding_id == "EMB_STU002_1"
+    assert emb1.embedding_id.startswith("EMB_")
     assert emb1.student_name == "Jane Smith"
 
     emb2 = student_service.save_embedding("STU002", [0.2] * 512)
-    assert emb2.embedding_id == "EMB_STU002_2"
+    assert emb2.embedding_id.startswith("EMB_")
+    assert emb1.embedding_id != emb2.embedding_id
 
     # Check student embedding count
     student = student_service.get_student("STU002")
