@@ -3,27 +3,69 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Environments & virtualenvs
-.env
-.env.local
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environments
+.venv/
 venv/
 env/
 ENV/
+env.bak/
+venv.bak/
 
-# Firebase Service Account Credentials & Keys
-serviceAccountKey.json
-*.serviceaccount.json
-credentials.json
-firebase-credentials.json
-*-firebase-adminsdk-*.json
+# Environment variables & secrets
+.env
+.env.*
+!.env.example
 
 # Operating System & IDE files
 .DS_Store
 Thumbs.db
+desktop.ini
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+attendance.db
+
+# User Face Photos (Keep embeddings .npy, exclude uploaded raw images for privacy)
+dataset/**/*.jpg
+dataset/**/*.jpeg
+dataset/**/*.png
+
+# Node modules
+node_modules/
 
 # Testing & Coverage
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Backup & logs
+backup_before_cleanup/
+*.log

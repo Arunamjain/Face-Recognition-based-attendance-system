@@ -1,173 +1,93 @@
-# AI-Based Face Recognition Attendance Marking System
+# Face Attendance System — College Project
 
-A high-performance, real-time college minor project that recognizes enrolled students via InsightFace and marks attendance automatically and idempotently into **Google Cloud Firestore** via a modular **FastAPI** backend.
+An automatic face recognition and attendance web application built using Python, FastAPI, InsightFace, and vanilla HTML/CSS/JavaScript.
 
----
+## Project Structure
 
-## Key Highlights
-
-- **Real-Time 30 FPS Camera Stream**: Camera acquisition and GUI display are fully decoupled from neural inference, achieving ~30 FPS on standard webcams.
-- **State-of-the-Art Face Analysis**:
-  - **SCRFD** lightweight face detection.
-  - **Laplacian Variance** blurriness filter and minimum face size gating.
-  - **ArcFace 512-dimensional embeddings** providing discrimination between distinct faces.
-  - Vectorized cosine similarity dot-products using optimized NumPy/BLAS.
-- **Robust Cloud Firestore Backend**:
-  - Secure trusted server operations using **Firebase Admin SDK**.
-  - Document collections for `students`, `embeddings`, and `attendance`.
-  - **Zero Duplicate Attendance Guarantee**: Uses deterministic record IDs (`{student_id}_{date}_{session_id}`) so duplicate attendance is physically impossible.
-  - In-memory client-side cooldown preventing redundant network calls when a student remains in front of the camera.
-  - Isolated background attendance queue ensuring network latencies **never stall or freeze the camera display**.
-- **Offline / Mock-Safe Fallback**:
-  - Runs out of the box with an in-memory mock Firestore engine if Firebase credentials are not yet configured, allowing local testing without cloud credentials.
-  - Seamlessly keeps existing local `.npy` embeddings in sync.
-
----
-
-## Architecture Diagram
-
-```
-+-------------------------------------------------------------------------------+
-|                                OpenCV Camera Loop                             |
-|  (Reads 640x480 frame -> Overlays cached labels & HUD -> Displays at ~30 FPS) |
-+---------------------------------------+---------------------------------------+
-                                        | (Non-blocking latest frame dispatch)
-                                        v
-                    +---------------------------------------+
-                    |        AI Worker Thread (Background)  |
-                    |  - SCRFD Detection (scaled 0.5x)      |
-                    |  - ArcFace 512D Embedding Extraction  |
-                    |  - Vectorized Cosine Match with RAM   |
-                    +-------------------+-------------------+
-                                        | (If recognized & score >= 0.55)
-                                        v
-                    +---------------------------------------+
-                    |     Attendance Queue (Non-blocking)   |
-                    +-------------------+-------------------+
-                                        |
-                                        v
-                    +---------------------------------------+
-                    |    Attendance Worker Thread           |
-                    |  - In-memory cooldown check           |
-                    |  - Firestore atomic record set        |
-                    +-------------------+-------------------+
-                                        |
-                                        v
-                           +------------------------+
-                           |  Cloud Firestore / DB  |
-                           +------------------------+
-```
-
----
-
-## Directory Structure
-
-```
-minor/
-├── backend/                        # Modular FastAPI Backend & Database Services
-│   ├── __init__.py
-│   ├── config.py                   # Environment variable loader & Firestore configs
-│   ├── firebase_client.py          # Firebase Admin SDK init & Mock client fallback
-│   ├── models.py                   # Pydantic schemas (Student, Embedding, Attendance)
-│   ├── services/
-│   │   ├── __init__.py
-│   │   ├── student_service.py      # CRUD for students & 512D embeddings
-│   │   └── attendance_service.py   # Idempotent attendance marking & query logic
-│   └── app.py                      # FastAPI REST API endpoints
-├── dataset/                        # Local dataset backup storage (.npy embeddings)
+```text
+face-attendance-system/
+│   app.py            # Main FastAPI web server, admin & session API routes
+│   detector.py       # InsightFace face detection, embedding matching & dynamic enrollment
+│   database.py       # SQLite database with schema migrations for batches, rooms & timings
+│   requirements.txt  # Python package dependencies
+│   README.md         # Project documentation and run steps
+│   .gitignore
+│
+├── dataset/          # Enrolled student face embeddings (.npy) and images
 │   ├── abhay/
 │   ├── Ankur/
 │   ├── arunam/
 │   ├── shrestha/
 │   └── vedang/
-├── tests/                          # Automated Pytest suite
-│   ├── __init__.py
-│   ├── test_models.py              # Pydantic schema validation tests
-│   ├── test_services.py            # Service layer & deduplication unit tests
-│   ├── test_api.py                 # FastAPI TestClient endpoint integration tests
-│   └── test_integration.py        # Vector accuracy & failure resilience tests
-├── config.py                       # Global camera & recognition thresholds
-├── pipeline.py                     # Face extraction & matching pipeline
-├── utils.py                        # Quality checks, embedding matrix & loaders
-├── main.py                         # Multi-threaded recognition & enrollment app
-├── .env.example                    # Template for environment configuration
-├── .gitignore                      # Protects keys, credentials, and virtualenvs
-├── README.md                       # Main project documentation
-└── BACKEND_FIREBASE.md             # Detailed backend & database architecture guide
+│
+├── models/           # InsightFace Buffalo_L ONNX model files
+│   └── buffalo_l/
+│
+└── static/           # Plain Vanilla Frontend (No Node.js / No npm)
+    ├── index.html    # User interface with Admin Panel & Session Controls
+    ├── style.css     # CSS styling with badges, filter bars & cards
+    └── script.js     # Webcam streaming, session state, and admin API calls
 ```
 
----
+## How to Set Up & Run
 
-## Prerequisites & Installation
+### 1. Clone & Pull Model Weights (Git LFS)
+This repository uses [Git LFS](https://git-lfs.com/) to manage the InsightFace `buffalo_l` ONNX models:
 
-### 1. Requirements
-- Python 3.10+ (tested on Python 3.14)
-- Webcam (built-in or USB)
+```powershell
+git clone https://github.com/Arunamjain/Face-Recognition-based-attendance-system.git
+cd Face-Recognition-based-attendance-system
+git lfs pull
+```
 
 ### 2. Install Dependencies
-```bash
+Open a terminal in this project folder:
+
+```powershell
 pip install -r requirements.txt
 ```
-*(If installing manually: `pip install fastapi uvicorn firebase-admin pydantic opencv-python insightface onnxruntime numpy pytest python-dotenv`)*
 
----
+### 3. Run the Application
 
-## Firebase Configuration
-
-1. Go to the [Firebase Console](https://console.firebase.google.com/).
-2. Create a new Firebase project (or use an existing one).
-3. Enable **Cloud Firestore** in test or production mode.
-4. Navigate to **Project Settings** -> **Service accounts**.
-5. Click **Generate new private key** and download the JSON file.
-6. Place the downloaded JSON file in the project root directory and rename it to `serviceAccountKey.json`.
-7. Copy `.env.example` to `.env`:
-   ```bash
-   cp .env.example .env
-   ```
-   Ensure `FIREBASE_CREDENTIALS_PATH=serviceAccountKey.json` is set.
-
-> **Note**: If you run without a `serviceAccountKey.json`, the system automatically activates the **In-Memory Mock Firestore** client. This allows development and testing to run seamlessly offline!
-
----
-
-## Running the System
-
-### 1. Start the FastAPI Backend Server
-To run the standalone REST API:
-```bash
-uvicorn backend.app:app --reload --host 127.0.0.1 --port 8000
-```
-- Interactive Swagger UI: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
-- Interactive ReDoc: [http://127.0.0.1:8000/redoc](http://127.0.0.1:8000/redoc)
-- Health Check: [http://127.0.0.1:8000/api/health](http://127.0.0.1:8000/api/health)
-
-### 2. Run Face Enrollment (Mode 2)
-To register a new student with their face embeddings:
-```bash
-python main.py
-```
-- Select choice `2` (Face Enrollment).
-- Enter the student's unique ID (e.g., `STU001` or college roll number).
-- Enter the student's full name.
-- Look at the camera. When the bounding box displays **Green ("Ready to Save")**, press `Space` or `C` to capture an embedding.
-- Press `Q` to finish. The embedding is stored locally and synchronized to Firebase Firestore.
-
-### 3. Run Real-Time Face Recognition & Attendance (Mode 1)
-```bash
-python main.py
-```
-- Select choice `1` (Default).
-- The system loads all enrolled embeddings from Firebase and the local dataset into RAM as a normalized matrix.
-- When an enrolled student looks at the camera with similarity score $\ge 0.55$, their attendance is instantly and idempotently marked in Firebase.
-- Press `Q` to quit.
-
----
-
-## Running Automated Tests
-
-Run the full automated test suite (including validation, service tests, API endpoint tests, and resilience tests):
-```bash
-pytest -v
+```powershell
+python app.py
 ```
 
-All tests run using mock Firestore isolation and do not require live cloud credentials.
+Or using uvicorn directly:
+
+```powershell
+uvicorn app:app --reload --host 127.0.0.1 --port 8000
+```
+
+### 4. Open in Browser
+Navigate to:
+```text
+http://127.0.0.1:8000
+```
+
+## Login Accounts & Role Privileges
+
+| Role | Username | Password | Privileges |
+| :--- | :--- | :--- | :--- |
+| **Admin** | `admin` | `admin123` | **Full Admin Control**: Add new students, train face embeddings, delete students from DB, configure sessions, mark/edit attendance. |
+| **Faculty** | `faculty` or `fac001` | `faculty123` | Full access to live webcam, classroom photo detection, session settings, and manual attendance marks. |
+| **Student** | `student` or `cs2024001` | `student123` | View attendance records and enrolled student directory. |
+
+## Key Features
+
+### 1. Admin Panel (Student Management & Dynamic Face Enrollment)
+*Accessible strictly to users logged in with the **Admin** role.*
+- **Add New Students**: Specify Student ID, Full Name, Roll Number, and Batch.
+- **Dynamic Face Training**: Upload a student photo or snap a webcam photo directly within the form. InsightFace automatically extracts and saves the 512-dimensional face embedding and hot-reloads the model into memory.
+- **Delete Students**: Remove any student from the database and permanently purge their face embeddings folder from `dataset/`.
+- **Role Verification**: Backend enforcement (`X-User-Role: admin`) blocks non-admin accounts with HTTP 403 Forbidden.
+
+### 2. Class Session Tracking (Batch, Room Number & Timing)
+- **Active Class Session Control**: Set current **Batch** (e.g. *Batch A*, *Batch B*, or custom), **Room Number** (e.g. *Room 101*, *Lab 2*), and **Class Timing / Slot** (e.g. *09:00 AM - 10:00 AM*, *11:15 AM - 12:15 PM*, or custom).
+- **Session-Tagged Attendance**: Every attendance record automatically logs the Batch, Room Number, Class Time, and exact timestamp.
+- **Duplicate Prevention**: Prevents duplicate attendance within the same class session while permitting the student to attend different class sessions throughout the day.
+- **Filters & Search**: Filter attendance records by Date, Batch, and Room Number.
+
+### 3. Live Webcam & Classroom Photo Detection
+- **Real-Time Webcam Face Recognition**: Detects and recognizes enrolled students on a live video feed, drawing green/red bounding boxes with confidence scores.
+- **Photo Upload Detection**: Upload high-resolution classroom images to recognize multiple students simultaneously and annotate their faces.

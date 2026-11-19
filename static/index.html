@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Face Attendance System</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+  <!-- Top Header Bar -->
+  <div class="header">
+    <div class="header-left">
+      <h2>Face Attendance System</h2>
+      <span class="header-subtitle">Real-Time Face Recognition & Automated Classroom Attendance</span>
+    </div>
+    <div id="user-info" class="user-info" style="display: none;">
+      <span id="user-display" class="user-tag">Logged in</span>
+      <button class="btn btn-small btn-secondary" onclick="logout()">Logout</button>
+    </div>
+  </div>
+
+  <div class="main-container">
+
+    <!-- Global Toast Alert -->
+    <div id="global-toast" class="toast" style="display: none;"></div>
+
+    <!-- Login Box (Visible when logged out) -->
+    <div id="login-section" class="box login-box">
+      <h3>Sign In</h3>
+      <p class="subtitle">Please sign in to access the face attendance system</p>
+      
+      <div id="login-error" class="error-msg" style="display: none;"></div>
+
+      <div class="form-group">
+        <label for="username">Username:</label>
+        <input type="text" id="username" placeholder="e.g. faculty or admin">
+      </div>
+
+      <div class="form-group">
+        <label for="password">Password:</label>
+        <input type="password" id="password" placeholder="e.g. faculty123 or admin123">
+      </div>
+
+      <button class="btn btn-primary btn-block" onclick="handleLogin()">Login</button>
+
+      <div class="demo-accounts">
+        <p><strong>Quick Demo Logins:</strong></p>
+        <div class="demo-buttons">
+          <button class="btn btn-secondary btn-small" onclick="quickFill('admin', 'admin123')">Admin (Full Control)</button>
+          <button class="btn btn-secondary btn-small" onclick="quickFill('faculty', 'faculty123')">Faculty</button>
+          <button class="btn btn-secondary btn-small" onclick="quickFill('student', 'student123')">Student</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Dashboard Section (Visible when logged in) -->
+    <div id="dashboard-section" style="display: none;">
+
+      <!-- Active Class Session Configuration Card -->
+      <div class="box session-card">
+        <div class="session-card-header">
+          <div>
+            <h3>Active Class Session</h3>
+            <p class="card-desc">Configure current class timing, batch, and room number for attendance taking</p>
+          </div>
+          <span id="session-badge" class="session-badge">Active: Batch A • Room 101 • 09:00 AM - 10:00 AM</span>
+        </div>
+
+        <div class="session-grid">
+          <div class="form-group">
+            <label for="session-batch-select">Batch:</label>
+            <div class="input-with-action">
+              <select id="session-batch-select" onchange="onSessionBatchChange()">
+                <option value="Batch A">Batch A</option>
+                <option value="Batch B">Batch B</option>
+                <option value="custom">+ New Batch...</option>
+              </select>
+              <input type="text" id="session-batch-custom" style="display: none; margin-top: 6px;" placeholder="Enter custom batch name" oninput="updateActiveSession()">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="session-room-input">Room Number:</label>
+            <input type="text" id="session-room-input" value="Room 101" placeholder="e.g. Room 101, Lab 2" oninput="updateActiveSession()">
+          </div>
+
+          <div class="form-group">
+            <label for="session-time-select">Class Time / Slot:</label>
+            <select id="session-time-select" onchange="onSessionTimeChange()">
+              <option value="09:00 AM - 10:00 AM">09:00 AM - 10:00 AM</option>
+              <option value="10:00 AM - 11:00 AM">10:00 AM - 11:00 AM</option>
+              <option value="11:15 AM - 12:15 PM">11:15 AM - 12:15 PM</option>
+              <option value="12:15 PM - 01:15 PM">12:15 PM - 01:15 PM</option>
+              <option value="02:00 PM - 03:00 PM">02:00 PM - 03:00 PM</option>
+              <option value="03:00 PM - 04:00 PM">03:00 PM - 04:00 PM</option>
+              <option value="custom">Custom Timing...</option>
+            </select>
+            <input type="text" id="session-time-custom" style="display: none; margin-top: 6px;" placeholder="e.g. 04:15 PM - 05:15 PM" oninput="updateActiveSession()">
+          </div>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <div class="nav-tabs">
+        <button class="tab-btn active" id="tab-btn-webcam" onclick="showTab('webcam')">Live Webcam</button>
+        <button class="tab-btn" id="tab-btn-manual" onclick="showTab('manual')">Manual Attendance</button>
+        <button class="tab-btn" id="tab-btn-attendance" onclick="showTab('attendance')">Attendance List</button>
+        <button class="tab-btn" id="tab-btn-upload" onclick="showTab('upload')">Upload Photo</button>
+        <button class="tab-btn" id="tab-btn-students" onclick="showTab('students')">Registered Students</button>
+        <!-- Admin Only Tab -->
+        <button class="tab-btn tab-admin-btn" id="tab-btn-admin" style="display: none;" onclick="showTab('admin')">Admin Panel</button>
+      </div>
+
+      <!-- ========================================================= -->
+      <!-- Tab 1: Live Webcam Attendance with Real-Time Feed -->
+      <!-- ========================================================= -->
+      <div id="tab-webcam" class="tab-content">
+        <div class="webcam-layout-grid">
+          
+          <!-- Left Column: Camera Stream -->
+          <div class="box">
+            <div class="table-header">
+              <div>
+                <h3>Webcam Face Recognition</h3>
+                <p>Faces recognized on video are logged in real-time below.</p>
+              </div>
+              <div class="session-pill" id="webcam-session-pill">Session: Batch A • Room 101</div>
+            </div>
+
+            <div class="camera-controls">
+              <button id="camera-toggle-btn" class="btn btn-success" onclick="toggleCamera()">Start Camera</button>
+              <span id="camera-status" class="status-badge">Camera Off</span>
+            </div>
+
+            <div id="status-message" class="info-msg" style="display: none;"></div>
+
+            <div class="video-wrapper">
+              <video id="webcam-video" width="640" height="480" autoplay playsinline muted></video>
+              <canvas id="overlay-canvas" width="640" height="480"></canvas>
+            </div>
+          </div>
+
+          <!-- Right Column: Live Real-Time Attendance Log -->
+          <div class="box live-feed-box">
+            <div class="table-header">
+              <div>
+                <h3>Live Attendance Feed</h3>
+                <p class="live-subtitle">Updated in real-time as faces are recognized.</p>
+              </div>
+              <span class="live-indicator"><span class="pulse-dot"></span> LIVE</span>
+            </div>
+
+            <div class="live-stats-bar">
+              <span>Today's Total: <strong id="live-count-today">0</strong></span>
+              <button class="btn btn-small btn-secondary" onclick="loadAttendance()">Refresh</button>
+            </div>
+
+            <div class="live-feed-table-container">
+              <table class="table table-compact">
+                <thead>
+                  <tr>
+                    <th>Time</th>
+                    <th>Student</th>
+                    <th>Batch</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="webcam-live-tbody">
+                  <tr><td colspan="4" style="text-align: center; color: #64748b;">No attendance recorded yet.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ========================================================= -->
+      <!-- Tab 2: Dedicated Manual Attendance -->
+      <!-- ========================================================= -->
+      <div id="tab-manual" class="tab-content" style="display: none;">
+        
+        <!-- Manual Entry Card -->
+        <div class="box">
+          <div class="table-header">
+            <div>
+              <h3>Manual Attendance Entry</h3>
+              <p>Quickly mark any student Present or Absent for a class session without using the camera.</p>
+            </div>
+            <div class="session-pill" id="manual-session-pill">Active: Batch A • Room 101</div>
+          </div>
+
+          <div id="manual-feedback-msg" style="display: none;"></div>
+
+          <div class="manual-form-grid">
+            <div class="form-group">
+              <label for="manual-entry-student">Select Student <span class="required">*</span>:</label>
+              <select id="manual-entry-student"></select>
+            </div>
+
+            <div class="form-group">
+              <label for="manual-entry-status">Status <span class="required">*</span>:</label>
+              <select id="manual-entry-status">
+                <option value="PRESENT">PRESENT</option>
+                <option value="ABSENT">ABSENT</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="manual-entry-batch">Batch:</label>
+              <input type="text" id="manual-entry-batch" value="Batch A">
+            </div>
+
+            <div class="form-group">
+              <label for="manual-entry-room">Room Number:</label>
+              <input type="text" id="manual-entry-room" value="Room 101">
+            </div>
+
+            <div class="form-group">
+              <label for="manual-entry-time">Class Time / Slot:</label>
+              <input type="text" id="manual-entry-time" value="09:00 AM - 10:00 AM">
+            </div>
+
+            <div class="form-group">
+              <label for="manual-entry-date">Date:</label>
+              <input type="date" id="manual-entry-date">
+            </div>
+          </div>
+
+          <div style="margin-top: 15px;">
+            <button class="btn btn-primary" onclick="submitDedicatedManualAttendance()">Save Attendance Record</button>
+            <button class="btn btn-secondary" onclick="syncManualFormWithSession()">Sync with Active Session</button>
+          </div>
+        </div>
+
+        <!-- Quick One-Click Attendance Table -->
+        <div class="box">
+          <div class="table-header">
+            <div>
+              <h3>Quick Roster Attendance (One-Click)</h3>
+              <p>Click "Mark Present" or "Mark Absent" directly for any student in the active session:</p>
+            </div>
+            <div class="inline-filters">
+              <label for="manual-roster-batch">Batch:</label>
+              <select id="manual-roster-batch" onchange="renderManualRosterTable()">
+                <option value="ALL">All Batches</option>
+              </select>
+            </div>
+          </div>
+
+          <table class="table" id="manual-roster-table">
+            <thead>
+              <tr>
+                <th>Student ID</th>
+                <th>Full Name</th>
+                <th>Roll Number</th>
+                <th>Batch</th>
+                <th>Current Status</th>
+                <th>Instant Action</th>
+              </tr>
+            </thead>
+            <tbody id="manual-roster-tbody">
+              <!-- Loaded via script.js -->
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+
+      <!-- ========================================================= -->
+      <!-- Tab 3: Attendance List -->
+      <!-- ========================================================= -->
+      <div id="tab-attendance" class="tab-content" style="display: none;">
+        <div class="box">
+          <div class="table-header">
+            <div>
+              <h3>Attendance Records</h3>
+              <p>View, filter, and edit all attendance logs in real time.</p>
+            </div>
+            <div class="inline-filters">
+              <button id="btn-toggle-autorefresh" class="btn btn-small btn-success" onclick="toggleAutoRefresh()">Auto-Refresh: ON (2s)</button>
+              <button class="btn btn-secondary btn-small" onclick="loadAttendance()">Refresh Now</button>
+            </div>
+          </div>
+
+          <!-- Attendance Filter Bar -->
+          <div class="filter-bar">
+            <div class="filter-item">
+              <label for="filter-date">Date:</label>
+              <input type="date" id="filter-date" onchange="loadAttendance()">
+            </div>
+            <div class="filter-item">
+              <label for="filter-date-quick">Date Preset:</label>
+              <select id="filter-date-quick" onchange="onQuickDateChange()">
+                <option value="today">Today</option>
+                <option value="ALL">All Dates (Entire History)</option>
+              </select>
+            </div>
+            <div class="filter-item">
+              <label for="filter-batch">Batch:</label>
+              <select id="filter-batch" onchange="loadAttendance()">
+                <option value="ALL">All Batches</option>
+              </select>
+            </div>
+            <div class="filter-item">
+              <label for="filter-room">Room No:</label>
+              <input type="text" id="filter-room" placeholder="All rooms..." oninput="loadAttendance()">
+            </div>
+            <div class="filter-item filter-actions">
+              <button class="btn btn-secondary btn-small" onclick="resetAttendanceFilters()">Reset Filters</button>
+            </div>
+          </div>
+
+          <table class="table" id="attendance-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Student ID</th>
+                <th>Full Name</th>
+                <th>Batch</th>
+                <th>Room</th>
+                <th>Class Time</th>
+                <th>Date</th>
+                <th>Marked Time</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="attendance-tbody">
+              <tr><td colspan="10">Loading attendance records...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ========================================================= -->
+      <!-- Tab 4: Upload Photo -->
+      <!-- ========================================================= -->
+      <div id="tab-upload" class="tab-content" style="display: none;">
+        <div class="box">
+          <div class="table-header">
+            <div>
+              <h3>Upload Image for Face Detection</h3>
+              <p>Select a classroom photo to detect student faces and mark attendance for the session.</p>
+            </div>
+            <div class="session-pill" id="upload-session-pill">Session: Batch A • Room 101</div>
+          </div>
+
+          <div class="form-group">
+            <input type="file" id="photo-input" accept="image/*" onchange="previewUploadImage()">
+          </div>
+
+          <button class="btn btn-primary" onclick="uploadAndDetect()">Detect Faces & Log Attendance</button>
+          <div id="upload-status" class="info-msg" style="display: none;"></div>
+
+          <div class="result-div" id="upload-result-container" style="display: none;">
+            <h4>Detection Result:</h4>
+            <div id="upload-summary"></div>
+            <img id="upload-result-img" class="result-img" alt="Detection Output">
+          </div>
+        </div>
+      </div>
+
+      <!-- ========================================================= -->
+      <!-- Tab 5: Registered Students -->
+      <!-- ========================================================= -->
+      <div id="tab-students" class="tab-content" style="display: none;">
+        <div class="box">
+          <div class="table-header">
+            <div>
+              <h3>Registered Students Database</h3>
+              <p>All students enrolled in the system with their assigned batch and face status.</p>
+            </div>
+            <div class="inline-filters">
+              <label for="student-batch-filter">Filter Batch:</label>
+              <select id="student-batch-filter" onchange="loadStudents()">
+                <option value="ALL">All Batches</option>
+              </select>
+              <button class="btn btn-secondary btn-small" onclick="loadStudents()">Refresh</button>
+            </div>
+          </div>
+
+          <table class="table" id="students-table">
+            <thead>
+              <tr>
+                <th>Student ID</th>
+                <th>Full Name</th>
+                <th>Roll Number</th>
+                <th>Batch</th>
+                <th>Face Trained</th>
+                <th>Today's Status</th>
+                <th>Quick Action</th>
+              </tr>
+            </thead>
+            <tbody id="students-tbody">
+              <!-- Loaded via script.js -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ========================================================= -->
+      <!-- Tab 6: Admin Panel (Accessible ONLY by Admin) -->
+      <!-- ========================================================= -->
+      <div id="tab-admin" class="tab-content" style="display: none;">
+        
+        <!-- Admin Notice -->
+        <div class="admin-banner">
+          <h4>Admin Control Panel</h4>
+          <p>Authorized access only. Add new students to the database, train face recognition embeddings, and delete existing student records.</p>
+        </div>
+
+        <!-- Section 1: Add New Student Form -->
+        <div class="box">
+          <h3>Add New Student to Database</h3>
+          <p class="subtitle">Enter student details and optionally provide a face photo to train recognition.</p>
+          
+          <div id="admin-add-status" style="display: none;"></div>
+
+          <div class="admin-form-grid">
+            <div class="form-group">
+              <label for="new-student-id">Student ID <span class="required">*</span>:</label>
+              <input type="text" id="new-student-id" placeholder="e.g. rohit or cs2024006 (alphanumeric)">
+              <small class="field-hint">Unique identifier used for folder & database key.</small>
+            </div>
+
+            <div class="form-group">
+              <label for="new-student-name">Full Name <span class="required">*</span>:</label>
+              <input type="text" id="new-student-name" placeholder="e.g. Rohit Sharma">
+            </div>
+
+            <div class="form-group">
+              <label for="new-student-roll">Roll Number:</label>
+              <input type="text" id="new-student-roll" placeholder="e.g. CS2024006">
+            </div>
+
+            <div class="form-group">
+              <label for="new-student-batch">Batch:</label>
+              <input type="text" id="new-student-batch" list="batch-suggestions" placeholder="e.g. Batch A, Batch B">
+              <datalist id="batch-suggestions"></datalist>
+            </div>
+          </div>
+
+          <!-- Face Enrollment Option -->
+          <div class="face-enroll-section">
+            <label class="section-label">Face Photo Enrollment (Optional but Recommended):</label>
+            <p class="field-hint">Upload a clear front-facing photo or snap one using the webcam to train InsightFace.</p>
+
+            <div class="enroll-actions">
+              <input type="file" id="new-student-photo-file" accept="image/*" onchange="previewNewStudentFile()">
+              <button type="button" class="btn btn-secondary btn-small" onclick="snapFromWebcamForEnrollment()">Snap from Webcam</button>
+            </div>
+
+            <!-- Preview box -->
+            <div id="enroll-preview-wrapper" style="display: none;" class="preview-card">
+              <span class="preview-title">Photo Preview:</span>
+              <img id="new-student-photo-preview" class="avatar-preview" alt="Preview">
+              <button type="button" class="btn btn-small btn-danger" onclick="clearNewStudentPhoto()">Remove Photo</button>
+            </div>
+          </div>
+
+          <div class="form-actions" style="margin-top: 20px;">
+            <button class="btn btn-success" id="btn-add-student" onclick="adminSubmitAddStudent()">Add & Enroll Student</button>
+            <button class="btn btn-secondary" onclick="resetAddStudentForm()">Reset Form</button>
+          </div>
+        </div>
+
+        <!-- Section 2: Delete & Manage Students -->
+        <div class="box">
+          <div class="table-header">
+            <div>
+              <h3>Manage & Delete Students</h3>
+              <p>Permanently remove students from the database and delete their face recognition embeddings.</p>
+            </div>
+            <button class="btn btn-secondary btn-small" onclick="adminLoadStudentsTable()">Refresh List</button>
+          </div>
+
+          <table class="table" id="admin-students-table">
+            <thead>
+              <tr>
+                <th>Student ID</th>
+                <th>Full Name</th>
+                <th>Roll Number</th>
+                <th>Batch</th>
+                <th>Face Trained</th>
+                <th>Admin Action</th>
+              </tr>
+            </thead>
+            <tbody id="admin-students-tbody">
+              <!-- Loaded via script.js -->
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+  <script src="/static/script.js"></script>
+</body>
+</html>
